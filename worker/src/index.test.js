@@ -1011,6 +1011,20 @@ test("Vercel function renders HTML and handles invalid request bodies", async ()
 });
 
 test("repository-root Vercel function forwards to the shared renderer", async () => {
+  const methodNotAllowed = {
+    headers: {},
+    statusCode: 200,
+    setHeader(name, value) {
+      this.headers[name] = value;
+    },
+    end(body) {
+      this.body = body;
+    },
+  };
+  await rootVercelRenderHandler({ method: "GET" }, methodNotAllowed);
+  assert.equal(methodNotAllowed.statusCode, 405);
+  assert.match(methodNotAllowed.body, /Use POST \/api\/render/);
+
   const response = {
     headers: {},
     statusCode: 200,

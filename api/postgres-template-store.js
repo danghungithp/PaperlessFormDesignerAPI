@@ -1,5 +1,3 @@
-const postgres = require("postgres");
-
 function createPostgresTemplateStore(sql) {
   let schemaReady;
 
@@ -77,27 +75,32 @@ function createPostgresTemplateStore(sql) {
   };
 }
 
-let store;
+let storePromise;
 
-function getStore() {
+async function getStore() {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is not configured.");
   }
-  if (!store) {
-    const sql = postgres(process.env.DATABASE_URL, {
-      ssl: "verify-full",
-      max: 1,
-      connect_timeout: 10,
-      idle_timeout: 20,
+  if (!storePromise) {
+    storePromise = import("postgres").then(({ default: postgres }) => {
+      const sql = postgres(process.env.DATABASE_URL, {
+        ssl: "verify-full",
+        max: 1,
+        connect_timeout: 10,
+        idle_timeout: 20,
+      });
+      return createPostgresTemplateStore(sql);
+    }).catch((error) => {
+      storePromise = undefined;
+      throw error;
     });
-    store = createPostgresTemplateStore(sql);
   }
-  return store;
+  return storePromise;
 }
 
 module.exports = {
   createPostgresTemplateStore,
-  getFormTemplate: (...args) => getStore().getFormTemplate(...args),
-  listFormTemplates: (...args) => getStore().listFormTemplates(...args),
-  saveFormTemplate: (...args) => getStore().saveFormTemplate(...args),
+  getFormTemplate: async (...args) => (await getStore()).getFormTemplate(...args),
+  listFormTemplates: async (...args) => (await getStore()).listFormTemplates(...args),
+  saveFormTemplate: async (...args) => (await getStore()).saveFormTemplate(...args),
 };
