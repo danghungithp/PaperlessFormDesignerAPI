@@ -301,6 +301,12 @@ function capexHtml(data, approvals, lineItems) {
   const sections = CAPEX_FIELDS.map(([title, fields], index) =>
     section(title, fields, data, index === 5 ? 2 : 1)
   );
+  const leftSections = [sections[0], sections[1], sections[4]]
+    .map((content) => `<div style="margin-bottom:10px;">${content}</div>`)
+    .join("");
+  const rightSections = [sections[2], sections[3], sections[5]]
+    .map((content) => `<div style="margin-bottom:10px;">${content}</div>`)
+    .join("");
   const itemTable = lineItemsTable(lineItems);
   const approvalHtml = approvalTable(approvals);
   const title = escapeHtml(displayValue(readField(data, ["txtAssetShortName", "txtAssetDescription"])) === "—"
@@ -316,22 +322,9 @@ function capexHtml(data, approvals, lineItems) {
     </table>
     <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:10px;">
       <tr>
-        <td style="width:48%;vertical-align:top;padding:0;">${sections[0]}</td>
+        <td style="width:48%;vertical-align:top;padding:0;">${leftSections}</td>
         <td style="width:4%;"></td>
-        <td style="width:48%;vertical-align:top;padding:0;">${sections[2]}</td>
-      </tr>
-      <tr><td colspan="3" style="height:10px;"></td></tr>
-      <tr>
-        <td style="width:48%;vertical-align:top;padding:0;">${sections[1]}</td>
-        <td style="width:4%;"></td>
-        <td style="width:48%;vertical-align:top;padding:0;">${sections[3]}</td>
-      </tr>
-    </table>
-    <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 10px;">
-      <tr>
-        <td style="width:48%;vertical-align:top;padding:0;">${sections[4]}</td>
-        <td style="width:4%;"></td>
-        <td style="width:48%;vertical-align:top;padding:0;">${sections[5]}</td>
+        <td style="width:48%;vertical-align:top;padding:0;">${rightSections}</td>
       </tr>
     </table>
     ${itemTable}
