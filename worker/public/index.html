@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Thiết kế, lưu và kết xuất biểu mẫu in cho Power Automate.">
+    <title>Paperless Form Designer</title>
+    <link rel="stylesheet" href="/designer.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Paperless Form Designer">
+        <span class="brand-mark">P</span>
+        <span><strong>Paperless</strong><small>FORM DESIGNER</small></span>
+      </a>
+      <div class="top-actions">
+        <label class="saved-picker">
+          <span>Template</span>
+          <select id="savedTemplates" aria-label="Chọn template đã lưu"></select>
+        </label>
+        <button class="button button-quiet" id="importButton" type="button">Nhập JSON</button>
+        <input id="importFile" type="file" accept="application/json,.json" hidden>
+        <button class="button button-quiet" id="exportButton" type="button">Xuất template</button>
+        <button class="button button-quiet" id="authButton" type="button">Đăng nhập</button>
+        <button class="button button-quiet" id="saveButton" type="button" disabled>Lưu template</button>
+        <button class="button button-primary" id="pdfButton" type="button">Tải PDF</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-heading">
+        <div>
+          <div class="eyebrow">WORKSPACE / FORM TEMPLATES</div>
+          <h1>Thiết kế biểu mẫu in</h1>
+          <p>Kéo thả các thành phần, chọn bố cục và kết xuất form cho Power Automate.</p>
+        </div>
+        <div class="heading-tools">
+          <label>Loại form
+            <select id="formType">
+              <option value="material-take-out">Material Take Out</option>
+              <option value="capex-v3">CAPEX V3</option>
+              <option value="capex-v1">CAPEX V1</option>
+            </select>
+          </label>
+          <label>Khổ giấy
+            <select id="paperSize">
+              <option>A4</option>
+              <option>A3</option>
+              <option>A5</option>
+              <option>Letter</option>
+              <option>Legal</option>
+            </select>
+          </label>
+          <label>Hướng giấy
+            <select id="orientation">
+              <option value="portrait">Dọc</option>
+              <option value="landscape">Ngang</option>
+            </select>
+          </label>
+          <button class="button button-outline" id="previewButton" type="button">Xem bản in</button>
+        </div>
+      </section>
+
+      <div class="workspace">
+        <aside class="panel palette">
+          <div class="panel-heading">
+            <div><h2>Thành phần</h2><p>Kéo vào trang hoặc nhấn để thêm</p></div>
+            <span class="count-badge">01</span>
+          </div>
+          <div class="palette-group">
+            <span class="group-label">BỐ CỤC</span>
+            <div class="layout-options">
+              <button type="button" class="layout-option" data-add-row="1"><span class="layout-icon layout-one"></span><span>1 cột</span><b>+</b></button>
+              <button type="button" class="layout-option" data-add-row="2"><span class="layout-icon layout-two"></span><span>2 cột</span><b>+</b></button>
+              <button type="button" class="layout-option" data-add-row="3"><span class="layout-icon layout-three"></span><span>3 cột</span><b>+</b></button>
+            </div>
+          </div>
+          <div class="palette-group">
+            <span class="group-label">THÀNH PHẦN CƠ BẢN</span>
+            <div class="control-palette" id="controlPalette"></div>
+          </div>
+          <div class="palette-group field-group">
+            <span class="group-label">TRƯỜNG DỮ LIỆU MẪU</span>
+            <div class="field-palette" id="fieldPalette"></div>
+          </div>
+          <div class="palette-footnote"><span class="tip-icon">i</span><span>Kéo một thành phần vào cột bất kỳ. Kéo các khối trên trang để sắp xếp lại.</span></div>
+        </aside>
+
+        <section class="panel editor-panel">
+          <div class="editor-toolbar">
+            <div class="view-tabs">
+              <button type="button" class="view-tab active" data-view="design">Thiết kế</button>
+              <button type="button" class="view-tab" data-view="preview">Bản in</button>
+            </div>
+            <div class="paper-indicator"><span class="status-dot"></span><span id="paperLabel">A4 · Dọc</span><span class="toolbar-separator"></span><span id="pageCount">1 trang</span></div>
+          </div>
+          <div class="canvas-wrap" id="designView">
+            <div class="paper" id="paper">
+              <section class="canvas-region">
+                <div class="canvas-region-heading"><strong>HEADER / ĐẦU TRANG</strong><span>Kéo logo, tiêu đề, ngày giờ hoặc thông tin lên đây</span></div>
+                <div class="canvas-preview-title" id="canvasFormTitle"></div>
+                <div id="headerRows"></div>
+                <button type="button" class="add-row-button region-add-row" data-add-region-row="headerRows"><span>+</span> Thêm hàng Header</button>
+              </section>
+              <section class="canvas-region">
+                <div class="canvas-region-heading"><strong>BODY / NỘI DUNG</strong><span>Kéo các trường và bảng đến vị trí mong muốn</span></div>
+              <div id="canvasRows"></div>
+              <button type="button" class="add-row-button" id="addRowButton"><span>+</span> Thêm hàng</button>
+              </section>
+              <section class="canvas-region">
+                <div class="canvas-region-heading"><strong>FOOTER / CUỐI TRANG</strong><span>Kéo thông tin bổ sung, ngày giờ hoặc hình ảnh xuống đây</span></div>
+                <div id="footerRows"></div>
+                <button type="button" class="add-row-button region-add-row" data-add-region-row="footerRows"><span>+</span> Thêm hàng Footer</button>
+              </section>
+            </div>
+          </div>
+          <div class="preview-wrap" id="previewView" hidden>
+            <iframe id="previewFrame" title="Xem trước bản in" sandbox></iframe>
+            <div id="previewMessage" class="preview-message">Nhấn “Xem bản in” để tạo bản xem trước từ dữ liệu mẫu.</div>
+          </div>
+          <div class="data-section">
+            <div class="data-heading">
+              <div><span class="group-label">DỮ LIỆU ĐẦU VÀO</span><strong>JSON mẫu cho Power Automate</strong></div>
+              <button type="button" class="text-button" id="copyRequest">Sao chép request</button>
+            </div>
+            <textarea id="dataJson" spellcheck="false" aria-label="JSON dữ liệu đầu vào"></textarea>
+            <div class="data-foot"><span>Thay dữ liệu mẫu bằng output từ flow trước khi gọi API.</span><code>POST /api/render-pdf</code></div>
+          </div>
+        </section>
+
+        <aside class="panel inspector">
+          <div class="panel-heading">
+            <div><h2>Thuộc tính</h2><p id="inspectorSubtitle">Cấu hình trang in</p></div>
+            <span class="inspector-icon">⚙</span>
+          </div>
+          <div class="inspector-content" id="inspectorContent"></div>
+          <div class="integration-card">
+            <div class="integration-icon">↗</div>
+            <div><strong>Dùng trong Power Automate</strong><p>Gửi <code>FormType</code>, <code>JsonTemplate</code> và dữ liệu đến API để nhận HTML/PDF.</p></div>
+          </div>
+          <div class="api-status"><span class="status-dot"></span><span id="apiStatus">Đang kết nối database…</span></div>
+        </aside>
+      </div>
+      <div class="notice" id="notice" role="status" aria-live="polite"></div>
+    </main>
+    <dialog class="auth-dialog" id="loginDialog" aria-labelledby="loginTitle">
+      <form class="auth-form" id="loginForm">
+        <span class="group-label">QUẢN TRỊ</span>
+        <h2 id="loginTitle">Đăng nhập</h2>
+        <p>Nhập mật khẩu quản trị để xem và lưu các template.</p>
+        <label for="adminPassword">Mật khẩu quản trị</label>
+        <input id="adminPassword" type="password" autocomplete="current-password" required>
+        <div class="auth-error" id="loginError" role="alert" hidden></div>
+        <div class="auth-actions">
+          <button class="button button-quiet" id="loginCancel" type="button">Đóng</button>
+          <button class="button button-primary" id="loginSubmit" type="submit">Đăng nhập</button>
+        </div>
+      </form>
+    </dialog>
+    <script type="module" src="/designer.js"></script>
+  </body>
+</html>

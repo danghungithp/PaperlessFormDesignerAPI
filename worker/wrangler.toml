@@ -1,0 +1,14 @@
+name = "paperless-form-renderer"
+main = "src/index.js"
+compatibility_date = "2025-03-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "paperless-form-templates"
+database_id = "00000000-0000-0000-0000-000000000001"
+migrations_dir = "migrations"
+
