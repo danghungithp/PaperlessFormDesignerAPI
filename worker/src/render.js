@@ -490,8 +490,24 @@ function templateControlMarkup(control, data, approvals, lineItems, requestName)
   }
   if (type === "field") {
     const label = escapeHtml(control.label ?? control.fieldKey ?? "Field");
-    const value = escapeHtml(displayValue(templateFieldValue(data, control.fieldKey ?? "")));
-    const multiline = control.multiline === true;
+    const rawValue = templateFieldValue(data, control.fieldKey ?? "");
+    const multiline = control.multiline === true || control.fieldType === "multiline";
+    const fieldType = String(control.fieldType || "").toLowerCase();
+
+    if (fieldType === "checkbox" || fieldType === "boolean") {
+      const isChecked = rawValue === true || String(rawValue).toLowerCase() === "true" || String(rawValue) === "1";
+      const checkIcon = isChecked
+        ? `<span style="display:inline-block;width:14px;height:14px;line-height:13px;border:1.5px solid #1b365d;border-radius:2px;text-align:center;font-weight:bold;font-size:11px;margin-right:6px;background:#e9eef5;color:#1b365d;vertical-align:middle;">&#10003;</span>`
+        : `<span style="display:inline-block;width:14px;height:14px;border:1.5px solid #94a3b8;border-radius:2px;margin-right:6px;background:#fff;vertical-align:middle;"></span>`;
+      return `<div style="margin:0 0 10px;">
+        <div style="margin-bottom:3px;color:#64748b;font-size:10px;">${label}</div>
+        <div style="min-height:22px;padding:4px 8px;border:1px solid #cbd5e1;box-sizing:border-box;display:flex;align-items:center;font-size:11px;">
+          ${checkIcon} <span style="font-weight:600;color:#0f172a;">${isChecked ? (escapeHtml(label) || "Đã xác nhận") : "Chưa chọn"}</span>
+        </div>
+      </div>`;
+    }
+
+    const value = escapeHtml(displayValue(rawValue));
     return `<div style="margin:0 0 10px;">
       <div style="margin-bottom:3px;color:#64748b;font-size:10px;">${label}</div>
       <div style="min-height:${multiline ? "48px" : "22px"};padding:6px 8px;border:1px solid #cbd5e1;white-space:pre-wrap;">${value}</div>
@@ -537,7 +553,8 @@ const TEMPLATE_CONTROL_TYPES = new Set([
 export function normalizeTemplate(template) {
   if (template && !Array.isArray(template) && Array.isArray(template.fields) &&
       !Array.isArray(template.rows)) {
-    if (template.schemaVersion !== "1.1") {
+    const version = template.schemaVersion || "1.1";
+    if (version !== "1.1") {
       throw new TypeError("Form schema template must use schemaVersion 1.1.");
     }
     if (template.sections !== undefined && !Array.isArray(template.sections)) {

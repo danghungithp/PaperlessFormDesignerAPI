@@ -3,6 +3,13 @@ import { fromFormSchema, toFormSchema } from "./designer-schema.mjs";
 const TYPE_LABELS = {
   heading: "Tiêu đề",
   field: "Trường dữ liệu",
+  "field:text": "Văn bản (Text)",
+  "field:multiline": "Nhiều dòng (Multiline)",
+  "field:number": "Số (Number)",
+  "field:date": "Ngày tháng (Date)",
+  "field:choice": "Lựa chọn (Choice)",
+  "field:checkbox": "Hộp kiểm (Checkbox)",
+  "field:boolean": "Đúng/Sai (Boolean)",
   lineItems: "Bảng Line Items",
   approvals: "Bảng Approval",
   image: "Hình ảnh / logo",
@@ -12,11 +19,45 @@ const TYPE_LABELS = {
   spacer: "Khoảng trống",
 };
 
+const FIELD_TYPE_LABELS = {
+  text: "Văn bản (Text)",
+  multiline: "Nhiều dòng (Multiline)",
+  number: "Số (Number)",
+  date: "Ngày tháng (Date)",
+  choice: "Lựa chọn (Choice)",
+  checkbox: "Hộp kiểm (Checkbox)",
+  boolean: "Đúng/Sai (Boolean)",
+  email: "Email",
+};
+
+function normalizeType(type) {
+  const value = String(type ?? "text").toLowerCase();
+  if (["choice", "multiline", "text", "date", "number", "boolean", "checkbox", "email"].includes(value)) {
+    return value;
+  }
+  if (value.includes("multi")) return "multiline";
+  if (value.includes("choice") || value.includes("select")) return "choice";
+  if (value.includes("check")) return "checkbox";
+  if (value.includes("bool")) return "boolean";
+  if (value.includes("date") || value.includes("time")) return "date";
+  if (value.includes("num") || value.includes("int") || value.includes("float")) return "number";
+  return "text";
+}
+
 const demoFields = [
-  { FieldKey: "department", FieldLabel: "department", FieldType: "choice", FieldValue: "Finance", IsDirty: true, SectionKey: "requestInfo" },
-  { FieldKey: "documenttype", FieldLabel: "Document Type", FieldType: "choice", FieldValue: "", IsDirty: true, SectionKey: "requestInfo" },
-  { FieldKey: "materialtype", FieldLabel: "Material Type", FieldType: "choice", FieldValue: "InventoryPart", IsDirty: true, SectionKey: "requestInfo" },
-  { FieldKey: "description", FieldLabel: "Reason", FieldType: "multiline", FieldValue: "dsfsdfsdf", IsDirty: true, SectionKey: "requestInfo" },
+  { FieldKey: "textField", FieldLabel: "Text Field", FieldType: "text", FieldValue: "Sample text value", IsDirty: true, SectionKey: "general", Required: false, Placeholder: "Enter text" },
+  { FieldKey: "multilineField", FieldLabel: "Multiline Field", FieldType: "multiline", FieldValue: "Sample multiline description", IsDirty: true, SectionKey: "general", Required: false, Placeholder: "Enter description" },
+  { FieldKey: "numberField", FieldLabel: "Number Field", FieldType: "number", FieldValue: "12345", IsDirty: true, SectionKey: "general", Required: false, Placeholder: "Enter number" },
+  { FieldKey: "dateField", FieldLabel: "Date Field", FieldType: "date", FieldValue: "2026-11-23", IsDirty: true, SectionKey: "general", Required: false, Placeholder: "Select date" },
+  { FieldKey: "jsonChoice", FieldLabel: "JSON Choice", FieldType: "choice", FieldValue: "OPTION1", IsDirty: true, SectionKey: "general", Required: false, Placeholder: "Select option", OptionSource: "json", Options: [{ value: "OPTION1", label: "Option 1", parentValue: "" }, { value: "OPTION2", label: "Option 2", parentValue: "" }] },
+  { FieldKey: "sharePointChoice", FieldLabel: "SharePoint Choice", FieldType: "choice", FieldValue: "Finance", IsDirty: true, SectionKey: "general", Required: false, Placeholder: "Select option", OptionSource: "sharepoint", OptionSet: "Department" },
+  { FieldKey: "dependentChoice", FieldLabel: "Dependent Choice", FieldType: "choice", FieldValue: "CostCenter1", IsDirty: true, SectionKey: "general", Required: false, Placeholder: "Select option", OptionSource: "sharepoint", OptionSet: "CostCenter", ParentField: "sharePointChoice" },
+  { FieldKey: "checkboxField", FieldLabel: "I confirm", FieldType: "checkbox", FieldValue: "true", IsDirty: true, SectionKey: "general", Required: false, Placeholder: "", DefaultValue: "false" },
+  { FieldKey: "booleanField", FieldLabel: "Budget Available", FieldType: "boolean", FieldValue: "false", IsDirty: true, SectionKey: "general", Required: false, Placeholder: "", DefaultValue: "false" },
+  { FieldKey: "department", FieldLabel: "department", FieldType: "choice", FieldValue: "Finance", IsDirty: true, SectionKey: "requestInfo", Required: true, OptionSource: "sharepoint", OptionSet: "Department" },
+  { FieldKey: "documenttype", FieldLabel: "Document Type", FieldType: "choice", FieldValue: "", IsDirty: true, SectionKey: "requestInfo", Required: true, OptionSource: "sharepoint", OptionSet: "Documenttype" },
+  { FieldKey: "materialtype", FieldLabel: "Material Type", FieldType: "choice", FieldValue: "InventoryPart", IsDirty: true, SectionKey: "requestInfo", Required: true, OptionSource: "sharepoint", OptionSet: "Materialtype" },
+  { FieldKey: "description", FieldLabel: "Reason", FieldType: "multiline", FieldValue: "Sample reason", IsDirty: true, SectionKey: "requestInfo", Required: true },
 ];
 const demoApprovals = [
   { ApprovalStepID: 1, ApprovalStepOrder: 1, ApproverEmail: "department.manager@example.com", State: "Department Manager review", Status: "Processing", Modified: "2026-11-16T07:27:55.000Z" },
@@ -77,103 +118,180 @@ function optionSetFromKey(key) {
 
 function createControl(type, field = {}) {
   const control = { id: createId(), type };
-  if (type === "heading") control.text = "Tiêu đề mục";
+  if (type === "heading") control.text = field.text ?? "Tiêu đề mục";
   if (type === "image") {
-    control.src = "";
-    control.alt = "Logo";
-    control.width = 160;
+    control.src = field.src ?? "";
+    control.alt = field.alt ?? "Logo";
+    control.width = field.width ?? 160;
   }
   if (type === "dateTime") {
-    control.label = "Ngày giờ tạo";
-    control.format = "datetime";
+    control.label = field.label ?? "Ngày giờ tạo";
+    control.format = field.format ?? "datetime";
   }
   if (type === "lineItems") {
-    control.title = "LINE ITEMS";
-    control.columns = [
+    control.title = field.title ?? "LINE ITEMS";
+    control.columns = Array.isArray(field.columns) ? field.columns : [
       { key: "partno", label: "Part Number" },
       { key: "description", label: "Description" },
       { key: "quanity", label: "Quantity" },
       { key: "note", label: "Note" },
     ];
   }
-  if (type === "approvals") control.title = "APPROVAL LINE";
+  if (type === "approvals") control.title = field.title ?? "APPROVAL LINE";
   if (type === "field") {
-    control.fieldKey = field.key ?? "department";
-    control.label = field.label ?? "Department";
-    control.multiline = field.type === "multiline";
-    control.fieldType = field.type ?? "text";
-    control.section = field.section ?? "requestInfo";
-    control.placeholder = field.placeholder ?? (control.fieldType === "choice"
-      ? `Select ${control.label}`
-      : control.fieldType === "multiline" ? `enter ${control.label.toLowerCase()}` : "");
-    control.required = field.required ?? true;
-    control.optionSource = field.optionSource ?? (control.fieldType === "choice" ? "sharepoint" : "");
-    control.optionSet = field.optionSet ?? (control.fieldType === "choice" ? optionSetFromKey(control.fieldKey) : "");
+    control.fieldKey = field.key ?? "textField";
+    control.label = field.label ?? (field.key ? (field.key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase())) : "Text Field");
+    control.fieldType = field.type ? normalizeType(field.type) : "text";
+    control.multiline = control.fieldType === "multiline";
+    control.section = field.section ?? "general";
+    control.sectionTitle = field.sectionTitle ?? "";
+    control.defaultValue = field.defaultValue ?? (control.fieldType === "checkbox" || control.fieldType === "boolean" ? "false" : "");
+    control.placeholder = field.placeholder ?? (
+      control.fieldType === "choice" ? `Select ${control.label}` :
+      control.fieldType === "multiline" ? `Enter ${control.label.toLowerCase()}` :
+      control.fieldType === "number" ? `Enter number` :
+      control.fieldType === "date" ? `Select date` :
+      control.fieldType === "text" ? `Enter text` : ""
+    );
+    control.required = Boolean(field.required);
+    control.visible = field.visible !== false;
+    control.optionSource = field.optionSource ?? (control.fieldType === "choice" ? "json" : "");
+    control.optionSet = field.optionSet ?? (control.fieldType === "choice" && control.optionSource === "sharepoint" ? optionSetFromKey(control.fieldKey) : "");
     control.parentField = field.parentField ?? "";
     control.options = Array.isArray(field.options) ? field.options : [];
-    control.layoutMode = field.layoutMode ?? (control.fieldType === "multiline" ? "vertical" : "horizontal");
+    control.layoutMode = field.layoutMode || (control.fieldType === "multiline" ? "vertical" : "horizontal");
   }
-  if (type === "text") control.text = "Nhập nội dung tĩnh";
-  if (type === "spacer") control.height = 20;
+  if (type === "text") control.text = field.text ?? "Nhập nội dung tĩnh";
+  if (type === "spacer") control.height = field.height ?? 20;
   return control;
 }
 
 function makeDefaultTemplate() {
-  const department = createControl("field", {
-    key: "department",
-    label: "department",
-    type: "choice",
-    section: "requestInfo",
-    placeholder: "Select department",
-    required: true,
-    optionSource: "sharepoint",
-    optionSet: "Department",
+  const textField = createControl("field", {
+    key: "textField",
+    label: "Text Field",
+    type: "text",
+    section: "general",
+    defaultValue: "",
+    placeholder: "Enter text",
+    required: false,
+    optionSource: "json",
+    layoutMode: "vertical",
   });
-  const materialType = createControl("field", {
-    key: "materialtype",
-    label: "Material Type",
-    type: "choice",
-    section: "requestInfo",
-    placeholder: "Select Material Type",
-    required: true,
-    optionSource: "sharepoint",
-    optionSet: "Materialtype",
+  const multilineField = createControl("field", {
+    key: "multilineField",
+    label: "Multiline Field",
+    type: "multiline",
+    section: "general",
+    defaultValue: "",
+    placeholder: "Enter description",
+    required: false,
+    optionSource: "json",
+    layoutMode: "vertical",
   });
-  const documentType = createControl("field", {
-    key: "documenttype",
-    label: "Document Type",
-    type: "choice",
-    section: "requestInfo",
-    placeholder: "Select Document Type",
-    required: true,
-    optionSource: "sharepoint",
-    optionSet: "Documenttype",
-    parentField: "",
-    options: [],
+  const numberField = createControl("field", {
+    key: "numberField",
+    label: "Number Field",
+    type: "number",
+    section: "general",
+    defaultValue: "",
+    placeholder: "Enter number",
+    required: false,
+    optionSource: "json",
     layoutMode: "horizontal",
   });
-  const reason = createControl("field", {
-    key: "description",
-    label: "Reason",
-    type: "multiline",
-    section: "requestInfo",
-    placeholder: "enter reason",
-    required: true,
+  const dateField = createControl("field", {
+    key: "dateField",
+    label: "Date Field",
+    type: "date",
+    section: "general",
+    defaultValue: "",
+    placeholder: "Select date",
+    required: false,
+    optionSource: "json",
+    layoutMode: "horizontal",
   });
-  reason.multiline = true;
+  const jsonChoice = createControl("field", {
+    key: "jsonChoice",
+    label: "JSON Choice",
+    type: "choice",
+    section: "general",
+    defaultValue: "",
+    placeholder: "Select option",
+    required: false,
+    optionSource: "json",
+    options: [
+      { value: "OPTION1", label: "Option 1", parentValue: "" },
+      { value: "OPTION2", label: "Option 2", parentValue: "" },
+    ],
+    layoutMode: "vertical",
+  });
+  const sharePointChoice = createControl("field", {
+    key: "sharePointChoice",
+    label: "SharePoint Choice",
+    type: "choice",
+    section: "general",
+    defaultValue: "",
+    placeholder: "Select option",
+    required: false,
+    optionSource: "sharepoint",
+    optionSet: "Department",
+    layoutMode: "vertical",
+  });
+  const dependentChoice = createControl("field", {
+    key: "dependentChoice",
+    label: "Dependent Choice",
+    type: "choice",
+    section: "general",
+    defaultValue: "",
+    placeholder: "Select option",
+    required: false,
+    optionSource: "sharepoint",
+    optionSet: "CostCenter",
+    parentField: "sharePointChoice",
+    layoutMode: "vertical",
+  });
+  const checkboxField = createControl("field", {
+    key: "checkboxField",
+    label: "I confirm",
+    type: "checkbox",
+    section: "general",
+    defaultValue: "false",
+    placeholder: "",
+    required: false,
+    optionSource: "json",
+    layoutMode: "vertical",
+  });
+  const booleanField = createControl("field", {
+    key: "booleanField",
+    label: "Budget Available",
+    type: "boolean",
+    section: "general",
+    defaultValue: "false",
+    placeholder: "",
+    required: false,
+    optionSource: "json",
+    layoutMode: "vertical",
+  });
+
   return {
     id: createId(),
-    name: "Form designer",
-    formCode: "MATERIAL_TAKE_OUT",
+    name: "General Request Form",
+    formCode: "GENERAL_REQUEST",
     formVersion: 1,
     formType: "material-take-out",
     paperSize: "A4",
     orientation: "portrait",
     headerRows: [],
     rows: [
-      { id: createId(), columns: [{ controls: [Object.assign(createControl("heading"), { text: "Request Information" })] }] },
-      { id: createId(), columns: [{ controls: [department] }, { controls: [documentType] }, { controls: [materialType] }] },
-      { id: createId(), columns: [{ controls: [reason] }] },
+      { id: createId(), columns: [{ controls: [Object.assign(createControl("heading"), { text: "General Information" })] }] },
+      { id: createId(), columns: [{ controls: [textField] }] },
+      { id: createId(), columns: [{ controls: [multilineField] }] },
+      { id: createId(), columns: [{ controls: [numberField] }, { controls: [dateField] }] },
+      { id: createId(), columns: [{ controls: [jsonChoice] }] },
+      { id: createId(), columns: [{ controls: [sharePointChoice] }] },
+      { id: createId(), columns: [{ controls: [dependentChoice] }] },
+      { id: createId(), columns: [{ controls: [checkboxField] }, { controls: [booleanField] }] },
       { id: createId(), columns: [{ controls: [createControl("lineItems")] }] },
       { id: createId(), columns: [{ controls: [createControl("approvals")] }] },
     ],
@@ -240,25 +358,35 @@ function getDataFields() {
     if (matchingKey) formValue = formValue[matchingKey];
   }
   if (Array.isArray(formValue)) {
-    return formValue.filter((field) => field && typeof field === "object" && field.FieldKey)
-      .map((field) => ({
-        key: String(field.FieldKey),
-        label: String(field.FieldLabel || field.FieldKey),
-        type: String(field.FieldType || "text").toLowerCase(),
-        section: String(field.SectionKey || "requestInfo"),
-        required: field.Required ?? true,
-        optionSource: field.OptionSource || (String(field.FieldType).toLowerCase() === "choice" ? "sharepoint" : ""),
-        optionSet: field.OptionSet || (String(field.FieldType).toLowerCase() === "choice" ? optionSetFromKey(field.FieldKey) : ""),
-        placeholder: field.Placeholder || "",
-        sampleValue: field.FieldValue ?? "",
-      }));
+    return formValue.filter((field) => field && typeof field === "object" && (field.FieldKey || field.key))
+      .map((field) => {
+        const key = String(field.FieldKey || field.key);
+        const label = String(field.FieldLabel || field.label || key);
+        const rawType = field.FieldType || field.type || "text";
+        const type = normalizeType(rawType);
+        return {
+          key,
+          label,
+          type,
+          section: String(field.SectionKey || field.section || "general"),
+          required: Boolean(field.Required ?? field.required ?? false),
+          defaultValue: field.DefaultValue ?? field.defaultValue ?? (type === "checkbox" || type === "boolean" ? "false" : ""),
+          placeholder: field.Placeholder ?? field.placeholder ?? "",
+          optionSource: field.OptionSource || field.optionSource || (type === "choice" ? "json" : ""),
+          optionSet: field.OptionSet || field.optionSet || "",
+          parentField: field.ParentField || field.parentField || "",
+          options: Array.isArray(field.Options) ? field.Options : Array.isArray(field.options) ? field.options : [],
+          layoutMode: field.LayoutMode || field.layoutMode || (type === "multiline" ? "vertical" : "horizontal"),
+          sampleValue: field.FieldValue ?? field.sampleValue ?? (type === "checkbox" || type === "boolean" ? "false" : ""),
+        };
+      });
   }
   if (formValue && typeof formValue === "object") {
     return Object.keys(formValue).map((key) => ({
       key,
       label: key.replace(/([a-z0-9])([A-Z])/g, "$1 $2"),
-      type: typeof formValue[key] === "number" ? "number" : "text",
-      section: "requestInfo",
+      type: typeof formValue[key] === "number" ? "number" : typeof formValue[key] === "boolean" ? "boolean" : "text",
+      section: "general",
       sampleValue: formValue[key] ?? "",
     }));
   }
@@ -309,7 +437,18 @@ function addControl(type, rowId, columnIndex = 0, field = {}, region = "rows") {
   const rows = template[region] || [];
   const row = rows.find((item) => item.id === rowId) ?? rows.at(-1);
   const column = row.columns[columnIndex] ?? row.columns[0];
-  const control = createControl(type, field);
+  let control;
+  if (type.startsWith("field:")) {
+    const specificType = type.slice(6);
+    control = createControl("field", {
+      ...field,
+      type: specificType,
+      key: field.key || `${specificType}Field`,
+      label: field.label || FIELD_TYPE_LABELS[specificType] || `${specificType.toUpperCase()} Field`,
+    });
+  } else {
+    control = createControl(type, field);
+  }
   column.controls.push(control);
   selectedControlId = control.id;
   renderDesigner();
@@ -325,10 +464,30 @@ function controlDisplayName(control) {
 }
 
 function renderPalette() {
-  const types = ["heading", "field", "lineItems", "approvals", "image", "dateTime", "text", "divider"];
+  const types = [
+    "heading", "text", "field",
+    "field:number", "field:date", "field:choice", "field:checkbox", "field:boolean",
+    "lineItems", "approvals", "image", "dateTime", "divider", "spacer",
+  ];
+  const controlIcons = {
+    heading: "T",
+    text: "¶",
+    field: "Aa",
+    "field:number": "#",
+    "field:date": "📅",
+    "field:choice": "▼",
+    "field:checkbox": "☑",
+    "field:boolean": "◩",
+    lineItems: "▤",
+    approvals: "✓",
+    image: "▧",
+    dateTime: "◷",
+    divider: "—",
+    spacer: "↕",
+  };
   elements.controlPalette.innerHTML = types.map((type) =>
     `<button type="button" class="palette-control" draggable="true" data-palette-type="${type}">
-      <span class="control-icon">${type === "heading" ? "T" : type === "field" ? "Aa" : type === "lineItems" ? "▤" : type === "approvals" ? "✓" : type === "image" ? "▧" : type === "dateTime" ? "◷" : type === "divider" ? "—" : "¶"}</span>
+      <span class="control-icon">${controlIcons[type] || "•"}</span>
       <span>${TYPE_LABELS[type]}</span>
     </button>`
   ).join("");
@@ -364,10 +523,20 @@ function renderRegion(rows, region, containerKey = region) {
                 <span class="control-handle">⋮⋮</span>
                 <span class="canvas-control-content">
                   <span class="canvas-control-label">${escapeHtml(controlDisplayName(control))}</span>
-                  ${control.type === "field" ? `<span class="canvas-control-sample">${escapeHtml(getFieldSample(control.fieldKey) || "Giá trị mẫu trống")}</span>` : ""}
+                  ${control.type === "field" ? `
+                    <span class="canvas-control-sample">${
+                      control.fieldType === "checkbox" || control.fieldType === "boolean"
+                        ? (getFieldSample(control.fieldKey) === "true" ? "☑ Đã chọn (true)" : "☐ Chưa chọn (false)")
+                        : escapeHtml(getFieldSample(control.fieldKey) || "Giá trị mẫu trống")
+                    }</span>
+                  ` : ""}
                   ${control.type === "image" && control.src ? `<img class="canvas-control-image" src="${escapeHtml(control.src)}" alt="">` : ""}
                 </span>
-                <span class="canvas-control-type">${escapeHtml(TYPE_LABELS[control.type] || control.type)}</span>
+                <span class="canvas-control-type">${escapeHtml(
+                  control.type === "field"
+                    ? (FIELD_TYPE_LABELS[control.fieldType] || control.fieldType)
+                    : (TYPE_LABELS[control.type] || control.type)
+                )}</span>
               </div>`).join("")
             : `<div class="column-empty">Thả thành phần vào đây</div>`}
         </div>`).join("")}
@@ -411,20 +580,51 @@ function renderInspector() {
     const options = fields.some((field) => field.key === control.fieldKey)
       ? fields
       : [{ key: control.fieldKey || "", label: control.label || control.fieldKey || "Tùy chỉnh" }, ...fields];
-    common.push(`<label>Trường JSON
-      <select data-control-prop="fieldKey">${options.map((field) => `<option value="${escapeHtml(field.key)}" ${field.key === control.fieldKey ? "selected" : ""}>${escapeHtml(field.label)} · ${escapeHtml(field.key)}</option>`).join("")}</select>
-    </label><label>Nhãn hiển thị<input data-control-prop="label" value="${escapeHtml(control.label)}"></label>
-    <label>Loại dữ liệu
-      <select data-control-prop="fieldType">
-        ${["choice", "text", "multiline", "date", "number", "boolean", "email"].map((type) => `<option value="${type}" ${control.fieldType === type ? "selected" : ""}>${type}</option>`).join("")}
-      </select>
-    </label>
-    <label>Section<input data-control-prop="section" value="${escapeHtml(control.section || "requestInfo")}"></label>
-    <label>Placeholder<input data-control-prop="placeholder" value="${escapeHtml(control.placeholder || "")}"></label>
-    <label>Option source<input data-control-prop="optionSource" value="${escapeHtml(control.optionSource || "")}"></label>
-    <label>Option set<input data-control-prop="optionSet" value="${escapeHtml(control.optionSet || "")}"></label>
-    <label class="checkbox-label"><input type="checkbox" data-control-prop="required" ${control.required ? "checked" : ""}> Bắt buộc</label>
-    <label class="checkbox-label"><input type="checkbox" data-control-prop="multiline" ${control.multiline ? "checked" : ""}> Trường nhiều dòng</label>`);
+
+    const isChoice = control.fieldType === "choice";
+
+    common.push(`
+      <label>Trường JSON
+        <select data-control-prop="fieldKey">${options.map((field) => `<option value="${escapeHtml(field.key)}" ${field.key === control.fieldKey ? "selected" : ""}>${escapeHtml(field.label)} · ${escapeHtml(field.key)}</option>`).join("")}</select>
+      </label>
+      <label>Nhãn hiển thị<input data-control-prop="label" value="${escapeHtml(control.label)}"></label>
+      <label>Loại dữ liệu
+        <select data-control-prop="fieldType">
+          ${["text", "multiline", "number", "date", "choice", "checkbox", "boolean", "email"].map((type) => `<option value="${type}" ${control.fieldType === type ? "selected" : ""}>${FIELD_TYPE_LABELS[type] || type}</option>`).join("")}
+        </select>
+      </label>
+      <label>Section<input data-control-prop="section" value="${escapeHtml(control.section || "general")}"></label>
+      <label>Giá trị mặc định (Default Value)<input data-control-prop="defaultValue" value="${escapeHtml(control.defaultValue ?? "")}"></label>
+      <label>Placeholder<input data-control-prop="placeholder" value="${escapeHtml(control.placeholder || "")}"></label>
+      <label>Bố cục nhãn (Layout mode)
+        <select data-control-prop="layoutMode">
+          <option value="horizontal" ${control.layoutMode === "horizontal" ? "selected" : ""}>Ngang (Horizontal)</option>
+          <option value="vertical" ${control.layoutMode === "vertical" ? "selected" : ""}>Dọc (Vertical)</option>
+        </select>
+      </label>
+      ${isChoice ? `
+        <label>Nguồn lựa chọn (Option source)
+          <select data-control-prop="optionSource">
+            <option value="json" ${control.optionSource === "json" ? "selected" : ""}>JSON tĩnh (Static options)</option>
+            <option value="sharepoint" ${control.optionSource === "sharepoint" ? "selected" : ""}>SharePoint Option Set</option>
+          </select>
+        </label>
+        ${control.optionSource === "sharepoint" ? `
+          <label>Tên Option Set<input data-control-prop="optionSet" value="${escapeHtml(control.optionSet || "")}" placeholder="VD: Department, CostCenter..."></label>
+          <label>Trường cha (Parent field - phụ thuộc)<input data-control-prop="parentField" value="${escapeHtml(control.parentField || "")}" placeholder="Key của trường cha nếu có (VD: sharePointChoice)"></label>
+        ` : `
+          <label>Danh sách Options (JSON)
+            <textarea data-control-prop="options" style="font-family:monospace;font-size:11px;min-height:80px;" spellcheck="false">${escapeHtml(JSON.stringify(control.options || [], null, 2))}</textarea>
+          </label>
+          <div class="inspector-hint">Cấu trúc: <code>[{"value": "OPT1", "label": "Option 1", "parentValue": ""}]</code></div>
+        `}
+      ` : ""}
+      <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:12px;">
+        <label class="checkbox-label"><input type="checkbox" data-control-prop="required" ${control.required ? "checked" : ""}> Bắt buộc</label>
+        <label class="checkbox-label"><input type="checkbox" data-control-prop="visible" ${control.visible !== false ? "checked" : ""}> Hiển thị</label>
+        ${control.fieldType === "multiline" ? `<label class="checkbox-label"><input type="checkbox" data-control-prop="multiline" checked disabled> Nhiều dòng</label>` : ""}
+      </div>
+    `);
   } else if (control.type === "heading" || control.type === "text") {
     common.push(`<label>${control.type === "heading" ? "Nội dung tiêu đề" : "Nội dung"}<textarea data-control-prop="text">${escapeHtml(control.text)}</textarea></label>`);
   } else if (control.type === "image") {
@@ -861,9 +1061,18 @@ elements.inspector.addEventListener("change", (event) => {
   }
   const property = event.target.dataset.controlProp;
   if (control && property) {
-    if (property === "multiline" || property === "required") control[property] = event.target.checked;
+    if (property === "multiline" || property === "required" || property === "visible") control[property] = event.target.checked;
     else if (property === "height" || property === "width") control[property] = Number(event.target.value);
-    else if (property === "columns") {
+    else if (property === "options") {
+      try {
+        const parsed = JSON.parse(event.target.value);
+        if (!Array.isArray(parsed)) throw new Error("Options phải là một mảng JSON.");
+        control.options = parsed;
+      } catch (error) {
+        showNotice(`Cấu hình options không hợp lệ: ${error.message}`, true);
+        return;
+      }
+    } else if (property === "columns") {
       try {
         const columns = JSON.parse(event.target.value);
         if (!Array.isArray(columns) || columns.length === 0 || columns.some((column) => !column.key)) {
@@ -878,7 +1087,13 @@ elements.inspector.addEventListener("change", (event) => {
       control[property] = event.target.value;
       if (property === "fieldType") {
         control.multiline = event.target.value === "multiline";
-        control.layoutMode = control.multiline ? "vertical" : "horizontal";
+        control.layoutMode = control.multiline ? "vertical" : (control.layoutMode || "horizontal");
+        if ((event.target.value === "checkbox" || event.target.value === "boolean") && !control.defaultValue) {
+          control.defaultValue = "false";
+        }
+        if (event.target.value === "choice" && !control.optionSource) {
+          control.optionSource = "json";
+        }
       }
     }
     renderDesigner();

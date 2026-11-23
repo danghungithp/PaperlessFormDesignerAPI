@@ -1,10 +1,14 @@
 function normalizeType(type) {
   const value = String(type ?? "text").toLowerCase();
-  if (["choice", "multiline", "text", "date", "number", "boolean", "email"].includes(value)) {
+  if (["choice", "multiline", "text", "date", "number", "boolean", "checkbox", "email"].includes(value)) {
     return value;
   }
   if (value.includes("multi")) return "multiline";
   if (value.includes("choice") || value.includes("select")) return "choice";
+  if (value.includes("check")) return "checkbox";
+  if (value.includes("bool")) return "boolean";
+  if (value.includes("date") || value.includes("time")) return "date";
+  if (value.includes("num") || value.includes("int") || value.includes("float") || value.includes("price") || value.includes("qty")) return "number";
   return "text";
 }
 
@@ -91,8 +95,11 @@ export function toFormSchema(template) {
 }
 
 export function fromFormSchema(schema) {
-  if (!schema || typeof schema !== "object" || schema.schemaVersion !== "1.1" ||
-      !Array.isArray(schema.fields)) {
+  if (!schema || typeof schema !== "object" || !Array.isArray(schema.fields)) {
+    throw new Error("JSON phải có cấu trúc schemaVersion 1.1 và fields array.");
+  }
+  const version = schema.schemaVersion || "1.1";
+  if (version !== "1.1") {
     throw new Error("JSON phải có cấu trúc schemaVersion 1.1 và fields array.");
   }
   if (schema.sections !== undefined && !Array.isArray(schema.sections)) {
