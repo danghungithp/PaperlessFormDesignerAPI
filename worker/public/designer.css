@@ -49,9 +49,10 @@ h1 { margin: 8px 0 5px; font: 800 25px Manrope, sans-serif; letter-spacing: -.7p
 .heading-tools label { display: grid; gap: 5px; color: #7c899d; font-size: 10px; font-weight: 600; }
 .heading-tools select { width: 118px; height: 34px; padding: 0 9px; border: 1px solid #e0e6ee; border-radius: 6px; background: #fff; color: #34425a; font-size: 11px; }
 .heading-tools label:nth-child(3) select { width: 92px; }
-.workspace { display: grid; grid-template-columns: 220px minmax(520px, 1fr) 250px; gap: 13px; align-items: stretch; min-height: 760px; }
+.workspace { display: grid; grid-template-columns: 240px minmax(520px, 1fr) 260px; gap: 13px; align-items: stretch; min-height: 760px; }
 .panel { overflow: hidden; border: 1px solid #e4e9f0; border-radius: 9px; background: #fff; box-shadow: 0 2px 8px #1c36560a; }
-.palette, .inspector { display: flex; flex-direction: column; }
+.palette { display: flex; flex-direction: column; overflow-y: auto; max-height: calc(100vh - 120px); }
+.inspector { display: flex; flex-direction: column; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; min-height: 66px; padding: 13px 15px; border-bottom: 1px solid #edf0f4; }
 .panel-heading h2 { margin: 0; font: 700 13px Manrope, sans-serif; }
 .panel-heading p { margin: 4px 0 0; color: #8b97a8; font-size: 10px; }

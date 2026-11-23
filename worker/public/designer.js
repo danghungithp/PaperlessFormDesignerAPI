@@ -82,8 +82,11 @@ const elements = {
   inspector: document.querySelector("#inspectorContent"),
   canvasFormTitle: document.querySelector("#canvasFormTitle"),
   inspectorSubtitle: document.querySelector("#inspectorSubtitle"),
-  controlPalette: document.querySelector("#controlPalette"),
+  fieldControlPalette: document.querySelector("#fieldControlPalette"),
+  layoutControlPalette: document.querySelector("#layoutControlPalette"),
+  controlPalette: document.querySelector("#controlPalette") || document.querySelector("#fieldControlPalette"),
   fieldPalette: document.querySelector("#fieldPalette"),
+  newFormButton: document.querySelector("#newFormButton"),
   dataJson: document.querySelector("#dataJson"),
   formType: document.querySelector("#formType"),
   paperSize: document.querySelector("#paperSize"),
@@ -432,6 +435,12 @@ function addRow(columnCount = 1, region = "rows") {
   renderDesigner();
 }
 
+let fieldCounters = {};
+function getNextFieldKey(prefix) {
+  fieldCounters[prefix] = (fieldCounters[prefix] || 0) + 1;
+  return `${prefix}_${fieldCounters[prefix]}`;
+}
+
 function addControl(type, rowId, columnIndex = 0, field = {}, region = "rows") {
   if (!template[region]?.length) addRow(1, region);
   const rows = template[region] || [];
@@ -439,12 +448,86 @@ function addControl(type, rowId, columnIndex = 0, field = {}, region = "rows") {
   const column = row.columns[columnIndex] ?? row.columns[0];
   let control;
   if (type.startsWith("field:")) {
-    const specificType = type.slice(6);
+    const parts = type.split(":");
+    const specificType = parts[1];
+    const subType = parts[2];
+
+    let defaultKey = field.key;
+    let defaultLabel = field.label;
+    let optionSource = field.optionSource || "json";
+    let optionSet = field.optionSet || "";
+    let parentField = field.parentField || "";
+    let options = Array.isArray(field.options) ? field.options : [];
+    let defaultValue = field.defaultValue ?? "";
+    let placeholder = field.placeholder || "";
+
+    if (!defaultKey) {
+      if (specificType === "text") {
+        defaultKey = getNextFieldKey("textField");
+        defaultLabel = `Text Field ${fieldCounters["textField"]}`;
+        placeholder = "Enter text";
+      } else if (specificType === "multiline") {
+        defaultKey = getNextFieldKey("multilineField");
+        defaultLabel = `Multiline Field ${fieldCounters["multilineField"]}`;
+        placeholder = "Enter description";
+      } else if (specificType === "number") {
+        defaultKey = getNextFieldKey("numberField");
+        defaultLabel = `Number Field ${fieldCounters["numberField"]}`;
+        placeholder = "Enter number";
+      } else if (specificType === "date") {
+        defaultKey = getNextFieldKey("dateField");
+        defaultLabel = `Date Field ${fieldCounters["dateField"]}`;
+        placeholder = "Select date";
+      } else if (specificType === "choice") {
+        if (subType === "sharepoint") {
+          defaultKey = getNextFieldKey("sharePointChoice");
+          defaultLabel = `SharePoint Choice ${fieldCounters["sharePointChoice"]}`;
+          optionSource = "sharepoint";
+          optionSet = "Department";
+          placeholder = "Select option";
+        } else if (subType === "dependent") {
+          defaultKey = getNextFieldKey("dependentChoice");
+          defaultLabel = `Dependent Choice ${fieldCounters["dependentChoice"]}`;
+          optionSource = "sharepoint";
+          optionSet = "CostCenter";
+          parentField = "sharePointChoice";
+          placeholder = "Select option";
+        } else {
+          defaultKey = getNextFieldKey("jsonChoice");
+          defaultLabel = `JSON Choice ${fieldCounters["jsonChoice"]}`;
+          optionSource = "json";
+          options = [
+            { value: "OPTION1", label: "Option 1", parentValue: "" },
+            { value: "OPTION2", label: "Option 2", parentValue: "" },
+          ];
+          placeholder = "Select option";
+        }
+      } else if (specificType === "checkbox") {
+        defaultKey = getNextFieldKey("checkboxField");
+        defaultLabel = `Checkbox ${fieldCounters["checkboxField"]}`;
+        defaultValue = "false";
+      } else if (specificType === "boolean") {
+        defaultKey = getNextFieldKey("booleanField");
+        defaultLabel = `Boolean ${fieldCounters["booleanField"]}`;
+        defaultValue = "false";
+      } else {
+        defaultKey = getNextFieldKey("field");
+        defaultLabel = `Field ${fieldCounters["field"]}`;
+      }
+    }
+
     control = createControl("field", {
       ...field,
+      key: defaultKey,
+      label: defaultLabel,
       type: specificType,
-      key: field.key || `${specificType}Field`,
-      label: field.label || FIELD_TYPE_LABELS[specificType] || `${specificType.toUpperCase()} Field`,
+      optionSource,
+      optionSet,
+      parentField,
+      options,
+      defaultValue,
+      placeholder,
+      layoutMode: specificType === "multiline" ? "vertical" : (field.layoutMode || "horizontal"),
     });
   } else {
     control = createControl(type, field);
@@ -463,34 +546,65 @@ function controlDisplayName(control) {
   return TYPE_LABELS[control.type] || "Thành phần";
 }
 
+const CONTROL_ICONS = {
+  "field:text": "Aa",
+  "field:multiline": "≡",
+  "field:number": "#",
+  "field:date": "📅",
+  "field:choice": "▼",
+  "field:choice:sharepoint": "⚡",
+  "field:choice:dependent": "↳",
+  "field:checkbox": "☑",
+  "field:boolean": "◩",
+  heading: "T",
+  text: "¶",
+  image: "▧",
+  dateTime: "◷",
+  divider: "—",
+  spacer: "↕",
+  lineItems: "▤",
+  approvals: "✓",
+};
+
 function renderPalette() {
-  const types = [
-    "heading", "text", "field",
-    "field:number", "field:date", "field:choice", "field:checkbox", "field:boolean",
-    "lineItems", "approvals", "image", "dateTime", "divider", "spacer",
+  const fieldTypes = [
+    "field:text",
+    "field:multiline",
+    "field:number",
+    "field:date",
+    "field:choice",
+    "field:choice:sharepoint",
+    "field:choice:dependent",
+    "field:checkbox",
+    "field:boolean",
   ];
-  const controlIcons = {
-    heading: "T",
-    text: "¶",
-    field: "Aa",
-    "field:number": "#",
-    "field:date": "📅",
-    "field:choice": "▼",
-    "field:checkbox": "☑",
-    "field:boolean": "◩",
-    lineItems: "▤",
-    approvals: "✓",
-    image: "▧",
-    dateTime: "◷",
-    divider: "—",
-    spacer: "↕",
-  };
-  elements.controlPalette.innerHTML = types.map((type) =>
-    `<button type="button" class="palette-control" draggable="true" data-palette-type="${type}">
-      <span class="control-icon">${controlIcons[type] || "•"}</span>
-      <span>${TYPE_LABELS[type]}</span>
+  const layoutTypes = [
+    "heading",
+    "text",
+    "image",
+    "dateTime",
+    "divider",
+    "spacer",
+    "lineItems",
+    "approvals",
+  ];
+
+  const renderButtons = (types) => types.map((type) =>
+    `<button type="button" class="palette-control" draggable="true" data-palette-type="${type}" title="${TYPE_LABELS[type] || type}">
+      <span class="control-icon">${CONTROL_ICONS[type] || "•"}</span>
+      <span>${TYPE_LABELS[type] || type}</span>
     </button>`
   ).join("");
+
+  if (elements.fieldControlPalette) {
+    elements.fieldControlPalette.innerHTML = renderButtons(fieldTypes);
+  }
+  if (elements.layoutControlPalette) {
+    elements.layoutControlPalette.innerHTML = renderButtons(layoutTypes);
+  }
+  if (elements.controlPalette && !elements.fieldControlPalette) {
+    elements.controlPalette.innerHTML = renderButtons([...fieldTypes, ...layoutTypes]);
+  }
 
   const fields = getDataFields();
   elements.fieldPalette.innerHTML = fields.length
@@ -1002,10 +1116,12 @@ document.querySelectorAll(".view-tab").forEach((tab) => {
   });
 });
 
-elements.controlPalette.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-palette-type]");
-  if (button) addControl(button.dataset.paletteType);
-});
+for (const palette of [elements.fieldControlPalette, elements.layoutControlPalette, elements.controlPalette].filter(Boolean)) {
+  palette.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-palette-type]");
+    if (button) addControl(button.dataset.paletteType);
+  });
+}
 elements.fieldPalette.addEventListener("click", (event) => {
   const button = event.target.closest("[data-field-key]");
   if (button) {
@@ -1013,6 +1129,27 @@ elements.fieldPalette.addEventListener("click", (event) => {
     addControl("field", null, 0, field ?? { key: button.dataset.fieldKey, label: button.dataset.fieldLabel });
   }
 });
+if (elements.newFormButton) {
+  elements.newFormButton.addEventListener("click", () => {
+    template = {
+      id: createId(),
+      name: "Biểu mẫu mới",
+      formCode: "CUSTOM_FORM",
+      formVersion: 1,
+      formType: elements.formType.value || "material-take-out",
+      paperSize: elements.paperSize.value || "A4",
+      orientation: elements.orientation.value || "portrait",
+      headerRows: [],
+      rows: [
+        { id: createId(), columns: [{ controls: [] }] },
+      ],
+      footerRows: [],
+    };
+    selectedControlId = null;
+    renderDesigner();
+    showNotice("Đã tạo biểu mẫu trống mới. Hãy kéo các control từ cột trái vào trang!");
+  });
+}
 for (const [region, container] of [
   ["headerRows", elements.headerRows],
   ["rows", elements.canvasRows],
@@ -1105,17 +1242,26 @@ elements.inspector.addEventListener("click", (event) => {
 });
 
 const canvasRegions = [elements.headerRows, elements.canvasRows, elements.footerRows];
-for (const palette of [elements.controlPalette, elements.fieldPalette, ...canvasRegions]) {
+const paletteContainers = [
+  elements.fieldControlPalette,
+  elements.layoutControlPalette,
+  elements.controlPalette,
+  elements.fieldPalette,
+  ...canvasRegions,
+].filter(Boolean);
+
+for (const palette of paletteContainers) {
   palette.addEventListener("dragstart", (event) => {
     const paletteControl = event.target.closest("[data-palette-type]");
     const field = event.target.closest("[data-field-key]");
     const control = event.target.closest("[data-control-id]");
     let payload;
-    if (paletteControl) payload = { type: paletteControl.dataset.paletteType };
-    else if (field) {
+    if (paletteControl) {
+      payload = { type: paletteControl.dataset.paletteType };
+    } else if (field) {
       const sampleField = getDataField(field.dataset.fieldKey);
       payload = {
-        type: "field",
+        type: `field:${sampleField?.type || field.dataset.fieldType || "text"}`,
         field: sampleField ?? {
           key: field.dataset.fieldKey,
           label: field.dataset.fieldLabel,
@@ -1123,8 +1269,7 @@ for (const palette of [elements.controlPalette, elements.fieldPalette, ...canvas
           section: field.dataset.fieldSection,
         },
       };
-    }
-    else if (control) {
+    } else if (control) {
       payload = { controlId: control.dataset.controlId };
       control.classList.add("dragging");
     }
@@ -1171,9 +1316,8 @@ for (const regionContainer of canvasRegions) {
       }
       if (moved) targetColumn.controls.push(moved);
     } else if (payload.type) {
-      const control = createControl(payload.type, payload.field);
-      targetColumn.controls.push(control);
-      selectedControlId = control.id;
+      addControl(payload.type, row.id, Number(columnNode.dataset.columnIndex), payload.field || {}, region);
+      return;
     }
     renderDesigner();
   });
