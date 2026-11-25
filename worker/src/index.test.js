@@ -129,6 +129,47 @@ test("generic CAPEX form type prefers V3 when both versions are present", () => 
   assert.doesNotMatch(html, /V1 value/);
 });
 
+test("ExpectedDate request parameter overrides the CAPEX expected receipt date", () => {
+  const html = renderForm({
+    FormType: "Standard",
+    FormCode: "CAPEX_MVP",
+    JsonFormValue: {
+      _CapexFormV3: {
+        dteDateOfExpectedReceipt: "2026-11-13",
+        txtAssetDescription: "Expected date test",
+      },
+    },
+    ExpectedDate: "2026-12-01",
+  });
+
+  assert.match(html, /2026-12-01/);
+  assert.doesNotMatch(html, /2026-11-13/);
+});
+
+test("ExpectedDate request parameter populates a matching Dynamic template field", () => {
+  const html = renderForm({
+    FormType: "Dynamic",
+    JsonFormValue: [{ FieldKey: "department", FieldValue: "Finance" }],
+    ExpectedDate: "2026-12-01",
+    JsonTemplate: {
+      schemaVersion: "1.1",
+      formCode: "MATERIAL_TAKE_OUT",
+      formName: "Dynamic expected date",
+      sections: [{ key: "requestInfo", title: "Request Information", order: 10, visible: true }],
+      fields: [{
+        key: "dteDateOfExpectedReceipt",
+        label: "Expected Receipt Date",
+        type: "date",
+        section: "requestInfo",
+        layout: { mode: "horizontal", row: 1, column: 1 },
+      }],
+    },
+  });
+
+  assert.match(html, /Expected Receipt Date/);
+  assert.match(html, /2026-12-01/);
+});
+
 test("CAPEX sections stack independently in balanced columns without overflowing long values", () => {
   const html = renderForm({
     formType: "capex-v3",
@@ -702,6 +743,67 @@ test("renders a fragment with the expected API response headers", async () => {
   assert.match(response.headers.get("Content-Type"), /text\/html/);
   assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
   assert.match(await response.text(), /sample/);
+});
+
+test("PDF endpoint renders HTML through Browser Run and returns PDF metadata", async () => {
+  let action;
+  let options;
+  const pdf = new TextEncoder().encode("%PDF-1.7\nsample");
+  const response = await worker.fetch(new Request("https://example.test/api/render-pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      formType: "material-take-out",
+      JsonFormValue: { MaterialTakeoutForm: { InpRequestTitle: "PDF test" } },
+      paperSize: "A4",
+      orientation: "landscape",
+    }),
+  }), {
+    BROWSER: {
+      async quickAction(name, requestOptions) {
+        action = name;
+        options = requestOptions;
+        return new Response(pdf, { headers: { "Content-Type": "application/pdf" } });
+      },
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(action, "pdf");
+  assert.equal(options.pdfOptions.format, "a4");
+  assert.equal(options.pdfOptions.landscape, true);
+  const result = await response.json();
+  assert.match(result.html, /PDF test/);
+  assert.equal(result.pdfContentType, "application/pdf");
+  assert.equal(result.pdfFileName, "paperless-material-take-out.pdf");
+  assert.equal(result.paperSize, "A4");
+  assert.equal(result.orientation, "landscape");
+  assert.equal(atob(result.pdfBase64).slice(0, 5), "%PDF-");
+});
+
+test("PDF endpoint rejects invalid paper size without calling Browser Run", async () => {
+  let browserCalled = false;
+  const response = await worker.fetch(new Request("https://example.test/api/render-pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      formType: "material-take-out",
+      JsonFormValue: {},
+      paperSize: "Tabloid",
+    }),
+  }), {
+    BROWSER: {
+      async quickAction() {
+        browserCalled = true;
+        return new Response("%PDF-");
+      },
+    },
+  });
+
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /paperSize must be A3, A4, A5/);
+  assert.equal(browserCalled, false);
 });
 
 test("serves the designer and its static assets from the Worker asset binding", async () => {

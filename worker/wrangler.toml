@@ -1,14 +1,17 @@
 name = "paperless-form-renderer"
 main = "src/index.js"
-compatibility_date = "2025-03-01"
+compatibility_date = "2026-03-24"
 
 [assets]
 directory = "./public"
 binding = "ASSETS"
 
+[browser]
+binding = "BROWSER"
+
 [[d1_databases]]
 binding = "DB"
-database_name = "paperless-form-templates"
-database_id = "00000000-0000-0000-0000-000000000001"
+database_name = "formdesigntemplate"
+database_id = "5f1115d1-61d0-41b9-bdc5-12024eaa3d7b"
 migrations_dir = "migrations"
 

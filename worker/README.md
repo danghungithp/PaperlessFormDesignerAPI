@@ -3,8 +3,9 @@
 Cloudflare Worker and Vercel Serverless Function API that renders CAPEX and
 Material Takeout form data as HTML or PDF. D1 stores saved template
 configurations for the Cloudflare Worker deployment; the repository-root
-Vercel deployment can use PostgreSQL for saved templates. Submitted form
-values are not stored or forwarded.
+Vercel deployment can use PostgreSQL for saved templates. The Worker does not
+persist submitted form values. PDF requests send the rendered HTML to Cloudflare
+Browser Run for PDF generation.
 
 ## Design and save print templates
 
@@ -40,6 +41,12 @@ npx wrangler secret put TEMPLATE_ADMIN_PASSWORD
 npx wrangler secret put TEMPLATE_SESSION_SECRET
 npx wrangler deploy
 ```
+
+The Worker config includes a Browser Run binding for PDF generation. Browser Run
+usage follows the Cloudflare Workers plan limits; on Workers Free, Quick Actions
+are limited to one request every 10 seconds and 10 browser minutes per day.
+See the [Browser Run limits](https://developers.cloudflare.com/browser-run/limits/)
+for current quotas.
 
 Use a randomly generated password of at least 24 characters and a separate
 random session secret of at least 32 characters. The designer uses the same
@@ -158,17 +165,23 @@ layout fills the HTML control width and grows with its content. All submitted
 values are HTML-escaped. CAPEX fields are mapped from the control names in
 `JsonFormValue`; material form values are shown using their supplied field
 names and grid cells.
+The optional top-level `ExpectedDate` request property populates matching
+`ExpectedDate`, `ExpectedReceiptDate`, or `dteDateOfExpectedReceipt` fields,
+including the built-in CAPEX expected receipt date and matching Dynamic
+template fields. When omitted, values from `JsonFormValue` are unchanged.
 
 To receive the generated HTML and a PDF in the same response, send the same
-request body to `POST /api/render-pdf` on the Vercel deployment. It returns
-JSON with `html`, `pdfBase64`, `pdfContentType`, `pdfFileName`, `paperSize`,
-and `orientation`. The optional `paperSize` is `A3`, `A4`, `A5`, `Letter`, or
-`Legal` (default `A4`); `orientation` is `portrait` or `landscape` (default
-`portrait`).
-The PDF is rendered by Chromium within the Vercel function; form data is not
-sent to an external PDF service. Vercel's build publishes the Chromium binary
-pack as a static asset. The function downloads it from the project's public
-production domain on cold start.
+request body to `POST /api/render-pdf` on either the Cloudflare Worker or Vercel
+deployment. The Cloudflare URL is
+`https://<worker-domain>/api/render-pdf`; it uses the Browser Run binding.
+Both endpoints return JSON with `html`, `pdfBase64`, `pdfContentType`,
+`pdfFileName`, `paperSize`, and `orientation`. The optional `paperSize` is
+`A3`, `A4`, `A5`, `Letter`, or `Legal` (default `A4`); `orientation` is
+`portrait` or `landscape` (default `portrait`).
+
+The Vercel endpoint renders PDF with Chromium inside the Vercel function.
+Vercel's build publishes the Chromium binary pack as a static asset, which the
+function downloads from the project's public production domain on cold start.
 
 To render a template supplied directly by a Power Automate flow, include
 `JsonTemplate` in the same HTTP body as the form outputs. `JsonTemplate` may

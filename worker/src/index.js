@@ -159,13 +159,14 @@ async function handleAdminAuth(request, env, pathname) {
   });
 }
 
-function jsonResponse(body, status = 200) {
+function jsonResponse(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       ...CORS_HEADERS,
       "Content-Type": "application/json; charset=utf-8",
       "X-Content-Type-Options": "nosniff",
+      ...extraHeaders,
     },
   });
 }
@@ -179,6 +180,108 @@ function htmlResponse(html) {
       "Cache-Control": "no-store",
     },
   });
+}
+
+function base64Encode(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function pdfFileName(formType) {
+  const slug = String(formType)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `paperless-${slug || "form"}.pdf`;
+}
+
+async function handlePdf(request, env) {
+  if (request.method !== "POST") {
+    return jsonResponse({ error: "Use POST /api/render-pdf." }, 405);
+  }
+  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") {
+    return jsonResponse({ error: "Cloudflare Browser Run is not configured." }, 503);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Request body must be valid JSON." }, 400);
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return jsonResponse({ error: "Request body must be a JSON object." }, 400);
+  }
+
+  let html;
+  let paperSize;
+  let orientation;
+  try {
+    if (body.template === undefined && env.DB && typeof body.formType === "string") {
+      const saved = await getFormTemplate(env.DB, body.formType);
+      if (saved) body = { ...body, template: saved.template };
+    }
+
+    html = renderForm(body);
+    paperSize = body.paperSize ?? body.template?.paperSize ?? "A4";
+    orientation = body.orientation ?? body.template?.orientation ?? "portrait";
+    if (!["A3", "A4", "A5", "Letter", "Legal"].includes(paperSize)) {
+      throw new TypeError("paperSize must be A3, A4, A5, Letter, or Legal.");
+    }
+    if (orientation !== "portrait" && orientation !== "landscape") {
+      throw new TypeError("orientation must be portrait or landscape.");
+    }
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return jsonResponse({ error: error.message }, 400);
+    }
+    console.error("Unable to prepare form for PDF rendering:", error);
+    return jsonResponse({ error: "Unable to render the requested form." }, 500);
+  }
+
+  try {
+    const pdfResponse = await env.BROWSER.quickAction("pdf", {
+      html,
+      pdfOptions: {
+        format: paperSize.toLowerCase(),
+        landscape: orientation === "landscape",
+        printBackground: true,
+        preferCSSPageSize: false,
+        margin: {
+          top: "8mm",
+          right: "8mm",
+          bottom: "8mm",
+          left: "8mm",
+        },
+      },
+    });
+    if (!pdfResponse.ok) {
+      console.error("Cloudflare Browser Run PDF request failed:", pdfResponse.status);
+      return jsonResponse({ error: "Cloudflare Browser Run could not generate the PDF." }, 502);
+    }
+
+    const pdf = new Uint8Array(await pdfResponse.arrayBuffer());
+    if (new TextDecoder().decode(pdf.subarray(0, 5)) !== "%PDF-") {
+      console.error("Cloudflare Browser Run returned a non-PDF response.");
+      return jsonResponse({ error: "Cloudflare Browser Run returned an invalid PDF." }, 502);
+    }
+
+    return jsonResponse({
+      html,
+      pdfBase64: base64Encode(pdf),
+      pdfContentType: "application/pdf",
+      pdfFileName: pdfFileName(body.FormCode ?? body.formCode ?? body.FormType ?? body.formType),
+      paperSize,
+      orientation,
+    }, 200, { "Cache-Control": "no-store" });
+  } catch (error) {
+    console.error("Cloudflare Browser Run PDF request failed:", error);
+    return jsonResponse({ error: "Unable to generate the PDF for this form." }, 502);
+  }
 }
 
 export default {
@@ -255,6 +358,9 @@ export default {
         }
       }
       return jsonResponse({ error: "Use GET or POST /api/templates." }, 405);
+    }
+    if (pathname === "/api/render-pdf") {
+      return handlePdf(request, env);
     }
     if (request.method === "GET" && env.ASSETS && !pathname.startsWith("/api/")) {
       return env.ASSETS.fetch(request);

@@ -786,6 +786,66 @@ function findDynamicFormData(formValues) {
   return wrapper ? formValues[wrapper] : formValues;
 }
 
+function withExpectedDate(data, expectedDate, formType, isDynamic) {
+  if (expectedDate === undefined) return data;
+
+  const expectedDateKeys = new Set([
+    "expecteddate",
+    "expectedreceiptdate",
+    "dtedateofexpectedreceipt",
+  ]);
+  if (Array.isArray(data)) {
+    const result = data.map((field) => {
+      if (!field || typeof field !== "object" || Array.isArray(field) ||
+          !expectedDateKeys.has(normalizedKey(readField(field, ["FieldKey"])))) {
+        return field;
+      }
+      const valueKey = Object.keys(field).find((key) => normalizedKey(key) === "fieldvalue") ?? "FieldValue";
+      return { ...field, [valueKey]: expectedDate };
+    });
+    if (!isDynamic) return result;
+
+    for (const key of ["ExpectedDate", "dteDateOfExpectedReceipt"]) {
+      if (!result.some((field) =>
+        field && typeof field === "object" && !Array.isArray(field) &&
+        normalizedKey(readField(field, ["FieldKey"])) === normalizedKey(key)
+      )) {
+        result.push({ FieldKey: key, FieldValue: expectedDate });
+      }
+    }
+    return result;
+  }
+
+  const matchingKeys = Object.keys(data)
+    .filter((key) => expectedDateKeys.has(normalizedKey(key)));
+  if (matchingKeys.length > 0) {
+    const result = { ...data };
+    for (const key of matchingKeys) result[key] = expectedDate;
+    if (formType !== "material" &&
+        !Object.keys(result).some((key) => normalizedKey(key) === "dtedateofexpectedreceipt")) {
+      result.dteDateOfExpectedReceipt = expectedDate;
+    } else if (isDynamic) {
+      for (const key of ["ExpectedDate", "dteDateOfExpectedReceipt"]) {
+        if (!Object.keys(result).some((candidate) => normalizedKey(candidate) === normalizedKey(key))) {
+          result[key] = expectedDate;
+        }
+      }
+    }
+    return result;
+  }
+  if (formType !== "material") {
+    return { ...data, dteDateOfExpectedReceipt: expectedDate };
+  }
+  if (isDynamic) {
+    return {
+      ...data,
+      ExpectedDate: expectedDate,
+      dteDateOfExpectedReceipt: expectedDate,
+    };
+  }
+  return data;
+}
+
 export function renderForm(request) {
   if (!request || typeof request !== "object" || Array.isArray(request)) {
     throw new TypeError("Request body must be a JSON object.");
@@ -817,6 +877,12 @@ export function renderForm(request) {
     { expectedArray: true },
   );
   const lineItems = lineItemsFrom(request, data);
+  const renderData = withExpectedDate(
+    data,
+    readField(request, ["ExpectedDate"]),
+    formType,
+    isDynamic,
+  );
 
   const suppliedTemplate = readField(request, ["JsonTemplate", "template"]);
   if (isDynamic) {
@@ -832,7 +898,7 @@ export function renderForm(request) {
       throw new TypeError("RequestName must be a string.");
     }
     const template = parseJsonInput(suppliedTemplate, "JsonTemplate");
-    return templateHtml(data, approvals, lineItems, template, formName, requestName);
+    return templateHtml(renderData, approvals, lineItems, template, formName, requestName);
   }
   if (request.template !== undefined) {
     const formName = readField(request, ["FormName", "formName"]);
@@ -844,9 +910,9 @@ export function renderForm(request) {
       throw new TypeError("RequestName must be a string.");
     }
     const template = parseJsonInput(request.template, "template");
-    return templateHtml(data, approvals, lineItems, template, formName, requestName);
+    return templateHtml(renderData, approvals, lineItems, template, formName, requestName);
   }
   return formType === "material"
-    ? materialHtml(data, approvals, lineItems)
-    : capexHtml(data, approvals, lineItems);
+    ? materialHtml(renderData, approvals, lineItems)
+    : capexHtml(renderData, approvals, lineItems);
 }
